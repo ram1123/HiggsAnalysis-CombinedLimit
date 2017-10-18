@@ -1,0 +1,21 @@
+imax 1 number of channels
+jmax * number of background
+kmax * number of nuisance parameters
+shapes * * histo_El_SCut.root $PROCESS $PROCESS_$SYSTEMATIC
+shapes data_obs * histo_El_SCut.root data
+Observation -1
+bin WV WV WV WV WV
+process top W+jets Z+jets Diboson aQGC
+process 1 2 3 4 0
+rate -1.00000 -1.00000  -1.00000  -1.00000  -1.00000  
+lumi_13TeV		lnN	1.02700	1.02700	1.02700	1.02700	1.02700  
+norm_Wjet		lnN	-	1.10	-	-	-  
+norm_top		lnN	1.10	-	-	-	-  
+CMS_eff_b_mistag	lnN	0.98000	0.98000	-	0.98000	0.98000
+CMS_eff_m		lnN	1.01800	1.01800	-	1.01800	1.01800
+CMS_eff_e		lnN	1.01700	1.01700	-	1.01700	1.01700
+ewk_qqbar		lnN	-	-	-	-	1.15000 
+pdf_qqbar		lnN	1.00000	1.25993	1.1	1.00598	1.01290 
+#CMS_scale_j		shape	1.00000	1.00000	1.00000	1.00000	-  
+#CMS_res_met		shape	1.00000	1.00000	1.00000	1.00000	-    
+#CMS_scale_l		shape	1.00000	1.00000	1.00000	1.00000	-   
