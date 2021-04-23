@@ -45,7 +45,7 @@ class SMHiggsBuilder:
         self.makeTotalWidth(); 
         self.makeBR(decay);
         self.modelBuilder.factory_('prod::SM_Gamma_%s(SM_GammaTot,SM_BR_%s)' % (decay,decay))
-    def makeScaling(self,what, Cb='Cb', Ctop='Ctop', CW='CW', CZ='CZ', Ctau='Ctau', Cc='Ctop', suffix=''):
+    def makeScaling(self,what, Cb='Cb', Ctop='Ctop', CW='CW', CZ='CZ', Ctau='Ctau', Cc='Ctop', Ccharm='Ccharm', suffix=''):
         prefix = 'SM_%(what)s_' % locals()
         if suffix:
             suffix += '_'
@@ -99,6 +99,42 @@ class SMHiggsBuilder:
 )'%locals()
 #            print  rooExpr
             self.modelBuilder.factory_(rooExpr)
+
+        elif what.startswith('hgg_charm'):
+                # Same as simply 'hgg', but taken from a file which includes a column for the charm
+                what = 'hgg'
+                prefix = 'SM_hgg_'
+
+                fileFor = {
+                        'hgg':'Gamma_Hgammagamma_withCharm.txt',
+                        }
+                structure = {
+                        'Gamma_tt':2, 'Gamma_bb':3, 'Gamma_WW':4,
+                        'Gamma_tb':5, 'Gamma_tW':6, 'Gamma_bW':7,
+                        'Gamma_ll':8,
+                        'Gamma_tl':9, 'Gamma_bl':10, 'Gamma_lW':11,
+                        # New charm columns
+                        'Gamma_cW':12, 'Gamma_ct':13, 'Gamma_cb':14, 'Gamma_cb':15,
+                        }
+
+                for qty, column in structure.iteritems():
+                        rooName = prefix+qty
+                        self.textToSpline(rooName, os.path.join(self.coupPath, fileFor['hgg' if what.startswith('hgg') else 'hzg']), ycol=column )
+                        scalingName = 'Scaling_'+what
+
+                rooExpr = (
+                        'expr::%(scalingName)s('
+                        '"( (@0*@0)*@4 + (@1*@1)*@5 + (@2*@2)*@6 + (@0*@1)*@7 + (@0*@2)*@8 + (@1*@2)*@9 + (@3*@3)*@10 + (@0*@3)*@11 + (@1*@3)*@12 + (@2*@3)*@13 +    (@2*@14)*@15 + (@0*@14)*@16 + (@1*@14)*@17  ) / (@4+@5+@6+@7+@8+@9+@10+@11+@12+@13 +@15+@16+@17 )",'
+                        '%(Ctop)s, %(Cb)s, %(CW)s, %(Ctau)s,'
+                        '%(prefix)sGamma_tt, %(prefix)sGamma_bb, %(prefix)sGamma_WW,'
+                        '%(prefix)sGamma_tb, %(prefix)sGamma_tW, %(prefix)sGamma_bW,'
+                        '%(prefix)sGamma_ll,'
+                        '%(prefix)sGamma_tl, %(prefix)sGamma_bl, %(prefix)sGamma_lW,'
+                        '%(Ccharm)s,' # @14
+                        '%(prefix)sGamma_cW, %(prefix)sGamma_ct, %(prefix)sGamma_cb )' # @15, 16, 17
+                        ) % locals()
+                self.modelBuilder.factory_(rooExpr)
+
         elif what.startswith('hgg') or what.startswith('hzg'): #in ['hgg', 'hzg']:
             fileFor = {'hgg':'Gamma_Hgammagamma.txt',
                        'hzg':'Gamma_HZgamma.txt'}
@@ -172,10 +208,10 @@ class SMHiggsBuilder:
         for K, DS in THU_GROUPS:
             self.modelBuilder.doVar("HiggsDecayWidthTHU_%s[-7,7]" % K)
         for D in ALL_HIGGS_DECAYS:
-            #print "For decay %s: " % D,
+            print "For decay %s: " % D,
             if D not in widthUncertainties:
                 self.modelBuilder.doVar("HiggsDecayWidth_UncertaintyScaling_%s[1]" % D)
-                #print " no uncertainties."
+                print " no uncertainties."
                 continue
             pnorm = ROOT.ProcessNormalization("HiggsDecayWidth_UncertaintyScaling_%s" %D, "")
             for K in widthUncertaintiesKeys:
@@ -188,9 +224,9 @@ class SMHiggsBuilder:
                     if var == None: continue
                 else:
                     var = self.modelBuilder.out.var("param_%s" % K)
-                #print " [ %+.1f%% from %s ]  " % (widthUncertainties[D][K]*100, var.GetName()),
+                print " [ %+.1f%% from %s ]  " % (widthUncertainties[D][K]*100, var.GetName()),
                 pnorm.addLogNormal(exp(widthUncertainties[D][K]), var)
-            #print "."
+            print "."
             self.modelBuilder.out._import(pnorm)
     def dump(self,name,xvar,values,logfile):
         xv = self.modelBuilder.out.var(xvar)

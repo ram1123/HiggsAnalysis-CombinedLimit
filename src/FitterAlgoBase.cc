@@ -215,10 +215,14 @@ RooFitResult *FitterAlgoBase::doFit(RooAbsPdf &pdf, RooAbsData &data, RooRealVar
 }
 
 RooFitResult *FitterAlgoBase::doFit(RooAbsPdf &pdf, RooAbsData &data, const RooArgList &rs, const RooCmdArg &constrain, bool doHesse, int ndim, bool reuseNLL, bool saveFitResult) {
+
+    std::cout << " [TK] Entering \"RooFitResult *FitterAlgoBase::doFit(...)\"" << std::endl;
+
     RooFitResult *ret = 0;
     if (reuseNLL && nll.get() != 0 && !forceRecreateNLL_) {
         ((cacheutils::CachingSimNLL&)(*nll)).setData(data); // reuse nll but swap out the data
     } else {
+        std::cout << " [TK] Resetting nll" << std::endl;
         nll.reset(); // first delete the old one, to avoid using more memory, even if temporarily
         nll.reset(pdf.createNLL(data, constrain, RooFit::Extended(pdf.canBeExtended()), RooFit::Offset(true))); // make a new nll
     }
@@ -233,15 +237,28 @@ RooFitResult *FitterAlgoBase::doFit(RooAbsPdf &pdf, RooAbsData &data, const RooA
     }
     double delta68 = 0.5*ROOT::Math::chisquared_quantile_c(1-0.68,ndim);
     double delta95 = 0.5*ROOT::Math::chisquared_quantile_c(1-0.95,ndim);
+
+    std::cout << " [TK] Initializing \"CascadeMinimizer minim(...)\"" << std::endl;
     CascadeMinimizer minim(*nll, CascadeMinimizer::Unconstrained, rs.getSize() ? dynamic_cast<RooRealVar*>(rs.first()) : 0);
+    std::cout << " [TK] Initializing done" << std::endl;
+
+    std::cout << " [TK] Doing \" minim.setStrategy(minimizerStrategy_); \" " << std::endl;
     //minim.setStrategy(minimizerStrategy_);
+    std::cout << " [TK] Doing \" minim.setErrorLevel(delta68); \" " << std::endl;
     minim.setErrorLevel(delta68);
+    std::cout << " [TK] Doing \" if (!autoBoundsPOIs_.empty()) minim.setAutoBounds(&autoBoundsPOISet_); \" " << std::endl;
     if (!autoBoundsPOIs_.empty()) minim.setAutoBounds(&autoBoundsPOISet_); 
+    std::cout << " [TK] Doing \" if (!autoMaxPOIs_.empty()) minim.setAutoMax(&autoMaxPOISet_); \" " << std::endl;
     if (!autoMaxPOIs_.empty()) minim.setAutoMax(&autoMaxPOISet_); 
+    std::cout << " [TK] Doing \" CloseCoutSentry sentry(verbose < 3); \" " << std::endl;
     CloseCoutSentry sentry(verbose < 3);    
+    std::cout << " [TK] Doing \" if (verbose>1) std::cout << \"do first Minimization \" << std::endl; \" " << std::endl;
     if (verbose>1) std::cout << "do first Minimization " << std::endl;
+    std::cout << " [TK] Doing \" TStopwatch tw; \" " << std::endl;
     TStopwatch tw; 
+    std::cout << " [TK] Doing \" if (verbose) tw.Start(); \" " << std::endl;
     if (verbose) tw.Start();
+    std::cout << " [TK] Doing \"bool ok = minim.minimize(verbose);\"" << std::endl;
     bool ok = minim.minimize(verbose);
     if (verbose>1) {
        std::cout << "Minimized in : " ; tw.Print();
@@ -262,6 +279,8 @@ RooFitResult *FitterAlgoBase::doFit(RooAbsPdf &pdf, RooAbsData &data, const RooA
     if (!ok && !keepFailures_) { std::cout << "Initial minimization failed. Aborting." << std::endl; return 0; }
     if (doHesse) minim.hesse();
     sentry.clear();
+    std::cout << " [TK] sentry.clear() is called; stdout should be restored" << std::endl;
+    std::cerr << " [TK] test printout to std::err" << std::endl;
     ret = (saveFitResult || rs.getSize() ? minim.save() : new RooFitResult("dummy","success"));
     if (verbose > 1 && ret != 0 && (saveFitResult || rs.getSize())) { ret->Print("V");  }
 

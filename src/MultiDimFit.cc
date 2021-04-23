@@ -2,6 +2,11 @@
 #include <stdexcept>
 #include <cmath>
 
+#include "TFile.h"
+#include "TH2D.h"
+#include "TH1D.h"
+#include "TCanvas.h"
+
 #include "TMath.h"
 #include "TFile.h"
 #include "RooArgSet.h"
@@ -56,6 +61,14 @@ bool MultiDimFit::saveFitResult_ = false;
 float MultiDimFit::maxDeltaNLLForProf_ = 200;
 float MultiDimFit::autoRange_ = -1.0;
 std::string MultiDimFit::fixedPointPOIs_ = "";
+
+bool MultiDimFit::importanceSampling_ = false;
+bool MultiDimFit::computeCovarianceMatrix_ = false;
+
+bool MultiDimFit::doPointsDefined_ = false;
+std::string MultiDimFit::doPoints_;
+std::vector<int>  MultiDimFit::doPointsList_;
+
 float MultiDimFit::centeredRange_ = -1.0;
 bool        MultiDimFit::robustHesse_ = false;
 std::string MultiDimFit::robustHesseLoad_ = "";
@@ -110,6 +123,12 @@ MultiDimFit::MultiDimFit() :
     ("robustHesse",  boost::program_options::value<bool>(&robustHesse_)->default_value(robustHesse_),  "Use a more robust calculation of the hessian/covariance matrix")
     ("robustHesseLoad",  boost::program_options::value<std::string>(&robustHesseLoad_)->default_value(robustHesseLoad_),  "Load the pre-calculated Hessian")
     ("robustHesseSave",  boost::program_options::value<std::string>(&robustHesseSave_)->default_value(robustHesseSave_),  "Save the calculated Hessian")
+        ("computeCovarianceMatrix",   boost::program_options::value<bool>(&computeCovarianceMatrix_)->default_value(computeCovarianceMatrix_), "Compute also the covariance matrix (do not use with algo=grid)")
+        ( "importanceSampling",
+          boost::program_options::value<std::string>()->default_value("none"),
+          "Text"
+          )
+        ("doPoints", boost::program_options::value<std::string>(&doPoints_)->default_value(""), "Fit only these points (e.g. --doPoints 11,13,20,21" )    
       ;
 }
 
@@ -149,6 +168,42 @@ void MultiDimFit::applyOptions(const boost::program_options::variables_map &vm)
     massName_ = vm["massName"].as<std::string>();
     toyName_ = vm["toyName"].as<std::string>();
     saveFitResult_ = (vm.count("saveFitResult") > 0);
+
+
+    std::string importanceSamplingOption = vm["importanceSampling"].as<std::string>();
+    importanceSampling_ = ( importanceSamplingOption != "none" );
+    if (importanceSampling_){
+            if (importanceSamplingOption.find(":") != std::string::npos) {
+                std::string importanceSamplingFile, importanceSamplingHistogram;
+                switch (std::count(importanceSamplingOption.begin(), importanceSamplingOption.end(), ':')) {
+                    case 1:
+                        importanceSamplingFile = importanceSamplingOption.substr(                  0, importanceSamplingOption.find(":"));
+                        importanceSamplingHistogram    = importanceSamplingOption.substr(importanceSamplingOption.find(":")+1, std::string::npos);
+                        if (verbose) std::cout << "Will read importanceSampling histogram '" << importanceSamplingHistogram << "' from file '" << importanceSamplingFile << "'" << std::endl;
+                        break;
+                    default:
+                        throw std::invalid_argument("The importanceSampling must be a rootfile.root:TH2_name");
+                    }
+                TFile *importanceSamplingFp = TFile::Open( importanceSamplingFile.c_str() );
+                importanceSamplingTH2D_ = (TH2D*)importanceSamplingFp->Get( importanceSamplingHistogram.c_str() );
+                importanceSamplingTH2D_->SetDirectory(0);
+                importanceSamplingFp->Close();
+                }
+        }
+
+
+    if(doPoints_!=""){
+        doPointsDefined_ = true;
+        std::cout << " [TK] Using only the following points:" << std::endl ;
+        std::stringstream ss( doPoints_ );
+        int tmpInt;
+        while( ss >> tmpInt ) {
+                std::cout << tmpInt << std::endl;
+                doPointsList_.push_back( tmpInt );
+                if (ss.peek() == ',') ss.ignore();
+                }
+        }
+
 }
 
 bool MultiDimFit::runSpecific(RooWorkspace *w, RooStats::ModelConfig *mc_s, RooStats::ModelConfig *mc_b, RooAbsData &data, double &limit, double &limitErr, const double *hint) { 
@@ -186,7 +241,10 @@ bool MultiDimFit::runSpecific(RooWorkspace *w, RooStats::ModelConfig *mc_s, RooS
     if (verbose <= 3) RooAbsReal::setEvalErrorLoggingMode(RooAbsReal::CountErrors);
     bool doHesse = (algo_ == Singles || algo_ == Impact) || (saveFitResult_) ;
     if ( !skipInitialFit_){
-        res.reset(doFit(pdf, data, (doHesse ? poiList_ : RooArgList()), constrainCmdArg, (saveFitResult_ && !robustHesse_), 1, true, false));
+        std::cout << " [TK] MultiDimFit.cc: Right before doFit call" << std::endl;
+        // res.reset(doFit(pdf, data, (doHesse ? poiList_ : RooArgList()), constrainCmdArg, (saveFitResult_ && !robustHesse_), 1, true, false));
+        res.reset(doFit(pdf, data, ((algo_ == Singles || algo_ == Impact) ? poiList_ : RooArgList()), constrainCmdArg, computeCovarianceMatrix_, 1, true, computeCovarianceMatrix_));
+        std::cout << " [TK] MultiDimFit.cc: Right after doFit call" << std::endl;
         if (!res.get()) {
             std::cout << "\n " <<std::endl;
             std::cout << "\n ---------------------------" <<std::endl;
@@ -247,6 +305,11 @@ bool MultiDimFit::runSpecific(RooWorkspace *w, RooStats::ModelConfig *mc_s, RooS
             res.reset(robustHesse.GetRooFitResult(res.get()));
         }
         robustHesse.WriteOutputFile("robustHesse"+name_+".root");
+    }
+
+    // Save covariance matrix if it was computed
+    if( computeCovarianceMatrix_ && res.get() ){
+        saveCovarianceMatrix(*res);
     }
 
    
@@ -654,6 +717,8 @@ void MultiDimFit::doGrid(RooWorkspace *w, RooAbsReal &nll)
             x = pmin[0] + (ireverse + xspacingOffset) * xspacing;
           }
 
+          std::cout << " [TK] In MultiDimFit::doGrid(): squareDistPoiStep_ = " << squareDistPoiStep_ << std::endl;
+
           if (squareDistPoiStep_) {
             // distance between steps goes as ~square of distance from middle or range (could this be changed to from best fit value?)
             double phalf = (pmax[0] - pmin[0]) / 2;
@@ -710,14 +775,62 @@ void MultiDimFit::doGrid(RooWorkspace *w, RooAbsReal &nll)
         unsigned int nX, nY;
         if (pointsPerPoi.size() == 0) {
             // same number of points per axis ("old" behavior)
+            std::cout<<"[tk] pointsPerPoi.size() == 0" << std::endl;
             unsigned int sqrn = ceil(sqrt(double(points_)));
             nX = nY = sqrn;
         } else {
+            std::cout<<"[tk] pointsPerPoi.size() != 0" << std::endl;
             // number of points different per axis
             nX = pointsPerPoi[0];
             nY = pointsPerPoi[1];
         }
         unsigned int nTotal = nX * nY;
+
+        std::cout << "assuming the number of points per axis is same nX == nY" << std::endl;
+        unsigned int sqrn = nX;
+        fprintf(
+                sentry.trueStdOut(),
+                " [TK] Entering doGrid n==2 conditional\n"
+                );
+
+        Double_t *pQuantiles = 0;
+        Double_t *xQuantiles = 0;
+        Double_t *yQuantiles = 0;
+        if (importanceSampling_) {
+
+                TH1D *xProjection = importanceSamplingTH2D_->ProjectionX();
+                TH1D *yProjection = importanceSamplingTH2D_->ProjectionY();
+
+                // TCanvas *c = new TCanvas( "c", "c", 1000, 800 );
+                // xProjection->Draw();
+                // c->SaveAs( "xProjection.pdf" );
+                // yProjection->Draw();
+                // c->SaveAs( "yProjection.pdf" );
+                // delete c;
+
+                pQuantiles = new Double_t[sqrn];
+                xQuantiles = new Double_t[sqrn];
+                yQuantiles = new Double_t[sqrn];
+
+                Float_t halfBinWidth = 0.5 / Float_t(sqrn) ;
+                for (unsigned int i=0;i<sqrn;i++){
+                        pQuantiles[i] = Float_t(i+1)/sqrn - halfBinWidth ;
+                        }
+
+                xProjection->GetQuantiles( sqrn, xQuantiles, pQuantiles );
+                yProjection->GetQuantiles( sqrn, yQuantiles, pQuantiles );
+
+                fprintf( sentry.trueStdOut(), "\nFound quantiles:" );
+                for( unsigned int iq = 0 ; iq < sqrn ; iq++ ){
+                        // std::cout << "iq = " << iq << " , pQuantiles = " << pQuantiles[iq] << " , xQuantiles = " << xQuantiles[iq] << " , yQuantiles = " << yQuantiles[iq] << std::endl;
+                        fprintf(
+                                sentry.trueStdOut(),
+                                "iq = %d, pQuantiles[iq] = %f, xQuantiles[iq] = %f, yQuantiles[iq] = %f \n",
+                                iq, pQuantiles[iq], xQuantiles[iq], yQuantiles[iq]
+                                );
+                        }
+
+                }
 
         // determine grid variables
         double deltaX, deltaY, spacingOffsetX, spacingOffsetY;
@@ -748,9 +861,36 @@ void MultiDimFit::doGrid(RooWorkspace *w, RooAbsReal &nll)
             for (unsigned int j = 0; j < nY; ++j, ++ipoint) {
                 if (ipoint < firstPoint_) continue;
                 if (ipoint > lastPoint_)  break;
+                if (doPointsDefined_){
+                    if ( !(std::find( doPointsList_.begin(), doPointsList_.end(), ipoint ) != doPointsList_.end() )) continue ;
+                }
                 *params = snap;
-                double x =  pmin[0] + (i + spacingOffsetX) * deltaX;
-                double y =  pmin[1] + (j + spacingOffsetY) * deltaY;
+                double x;
+                double y;
+
+                if (importanceSampling_) {
+                        x = (double)xQuantiles[i];
+                        y = (double)yQuantiles[j];
+                        }
+                else if (squareDistPoiStep_){
+                        double icenter = 0.5 * ( sqrn - 1 );
+                        if ( i < icenter ){
+                                x = p0[0] - TMath::Power( ( i - icenter ) / icenter, 2 ) * ( p0[0] - pmin[0] );
+                                }
+                        else {
+                                x = p0[0] + TMath::Power( ( i - icenter ) / icenter, 2 ) * ( pmax[0] - p0[0] );
+                                }
+                        if ( j < icenter ){
+                                y = p0[1] - TMath::Power( ( j - icenter ) / icenter, 2 ) * ( p0[1] - pmin[1] );
+                                }
+                        else {
+                                y = p0[1] + TMath::Power( ( j - icenter ) / icenter, 2 ) * ( pmax[1] - p0[1] );
+                                }
+                        }
+                else{
+                    double x =  pmin[0] + (i + spacingOffsetX) * deltaX;
+                    double y =  pmin[1] + (j + spacingOffsetY) * deltaY;
+                }
                 if (verbose && (ipoint % nprint == 0)) {
                          fprintf(sentry.trueStdOut(), "Point %d/%d, (i,j) = (%d,%d), %s = %f, %s = %f\n",
                                         ipoint,nTotal, i,j, poiVars_[0]->GetName(), x, poiVars_[1]->GetName(), y);
@@ -858,6 +998,9 @@ void MultiDimFit::doGrid(RooWorkspace *w, RooAbsReal &nll)
                 }
             }
         }
+        delete [] pQuantiles;
+        delete [] xQuantiles;
+        delete [] yQuantiles;
 
     } else { // Use utils routine if n > 2
         RooAbsReal::setEvalErrorLoggingMode(RooAbsReal::CountErrors);
@@ -1233,3 +1376,13 @@ void MultiDimFit::splitGridPoints(const std::string& s, std::vector<unsigned int
         points.push_back(std::stoul(strPoint));
     }
 }
+
+void MultiDimFit::saveCovarianceMatrix(RooFitResult &res) {
+        // TFile *fitOut_ = new TFile( "COVMATISHERE.root","recreate" );
+        // fitOut_->WriteTObject( &res, "fit" );
+        // fitOut_->cd();
+        // fitOut_->Close();
+        res.Print();
+        outputFile->WriteTObject( &res, "fit" );
+        outputFile->cd();
+        } 

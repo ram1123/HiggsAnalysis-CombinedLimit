@@ -53,6 +53,7 @@ CascadeMinimizer::CascadeMinimizer(RooAbsReal &nll, Mode mode, RooRealVar *poi) 
     poisForAutoBounds_(0),
     poisForAutoMax_(0)
 {
+    std::cout << " [TK] In \"CascadeMinimizer::CascadeMinimizer(...)\" (initialization)" << std::endl;
     remakeMinimizer();
 }
 
@@ -373,6 +374,12 @@ bool CascadeMinimizer::iterativeMinimize(double &minimumNLL,int verbose, bool ca
 
 bool CascadeMinimizer::minimize(int verbose, bool cascade) 
 {
+
+    fprintf(
+        CloseCoutSentry::trueStdOutGlobal(),
+        " [TK] Now entering CascadeMinimizer::minimize(int verbose, bool cascade) \n"
+        );
+
     static int optConst = runtimedef::get("MINIMIZER_optimizeConst");
     static int rooFitOffset = runtimedef::get("MINIMIZER_rooFitOffset");
     if (runtimedef::get("CMIN_CENSURE")) {
@@ -393,6 +400,12 @@ bool CascadeMinimizer::minimize(int verbose, bool cascade)
     RooArgSet nuisances = CascadeMinimizerGlobalConfigs::O().nuisanceParameters;
 
     if (preFit_ ) {
+
+        fprintf(
+            CloseCoutSentry::trueStdOutGlobal(),
+            " [TK] Entering \"if (preFit_ ) {...}\" conditional \n"
+            );
+
         RooArgSet frozen(nuisances);
         RooStats::RemoveConstantParameters(&frozen);
         utils::setAllConstant(frozen,true);
@@ -414,6 +427,12 @@ bool CascadeMinimizer::minimize(int verbose, bool cascade)
     
     bool ret = true;
     if (!doMultipleMini){
+
+        fprintf(
+            CloseCoutSentry::trueStdOutGlobal(),
+            " [TK] Entering \"if (!doMultipleMini){...}\" conditional \n"
+            );
+
     	if (mode_ == Unconstrained && poiOnlyFit_) {
        	 trivialMinimize(nll_, *poi_, 200);
     	} 
@@ -421,6 +440,10 @@ bool CascadeMinimizer::minimize(int verbose, bool cascade)
       ret = improve(verbose, cascade);
 
     }else{
+
+        fprintf( CloseCoutSentry::trueStdOutGlobal(),
+            " [TK] Entering \"else\" w.r.t. \"if (!doMultipleMini){...}\" conditional \n" );
+
       // Do the discrete nuisance magic
 
       // clean parameters before minimization but dont include the pdf indeces of course!
@@ -431,6 +454,10 @@ bool CascadeMinimizer::minimize(int verbose, bool cascade)
       // Before each step, reset the parameters back to their prefit state!
       
       if (runShortCombinations) {
+
+            fprintf( CloseCoutSentry::trueStdOutGlobal(),
+                " [TK] Entering \"if (runShortCombinations) {...}\" conditional \n" );
+
         // Initial fit under current index values
         improve(verbose, cascade);
         double backupApproxPreFitTolerance = approxPreFitTolerance_;
@@ -446,6 +473,9 @@ bool CascadeMinimizer::minimize(int verbose, bool cascade)
         }
         approxPreFitTolerance_ = backupApproxPreFitTolerance;
       } else {
+
+            fprintf( CloseCoutSentry::trueStdOutGlobal(),
+                " [TK] Entering \"else\" w.r.t. \"if (runShortCombinations) {...}\" conditional \n" );
 
         double minimumNLL = 10+nll_.getVal();
         std::vector<std::vector<bool>> contIndex;

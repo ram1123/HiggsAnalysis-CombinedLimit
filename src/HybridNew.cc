@@ -268,6 +268,7 @@ void HybridNew::setupPOI(RooStats::ModelConfig *mc_s) {
     RooArgSet POI(*mc_s->GetParametersOfInterest());
     utils::createSnapshotFromString(rValue_, POI, rValues_, "--singlePoint or --signalForSignificance");
     if (rValues_.getSize() != POI.getSize()) {
+        POI.Print();
         throw std::invalid_argument("Error: not all parameters of interest specified in  --singlePoint or --signalForSignificance");
     }
 }

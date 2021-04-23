@@ -604,6 +604,12 @@ void Combine::run(TString hlfFile, const std::string &dataset, double &limit, do
   
   if (freezeNuisances_ != "") {
 
+      std::cout<<"List of all nuisances:"<<std::endl;
+      std::auto_ptr<TIterator> iter(nuisances->createIterator());
+      for (RooAbsArg *a = (RooAbsArg*) iter->Next(); a != 0; a = (RooAbsArg*) iter->Next()) {
+        const std::string &nuisName = a->GetName();
+        std::cout<<" "<<nuisName<<std::endl;
+      }
       // expand regexps          
       while (freezeNuisances_.find("rgx{") != std::string::npos) {          
           size_t pos1 = freezeNuisances_.find("rgx{");
@@ -612,7 +618,7 @@ void Combine::run(TString hlfFile, const std::string &dataset, double &limit, do
           std::string poststr = freezeNuisances_.substr(pos2+1,freezeNuisances_.size()-pos2);
           std::string reg_esp = freezeNuisances_.substr(pos1+4,pos2-pos1-4);
           
-          //std::cout<<"interpreting "<<reg_esp<<" as regex "<<std::endl;
+          std::cout<<"interpreting "<<reg_esp<<" as regex "<<std::endl;
           std::regex rgx( reg_esp, std::regex::ECMAScript);
           
           std::string matchingParams="";

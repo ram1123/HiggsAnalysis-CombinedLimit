@@ -10,6 +10,7 @@
  */
 #include "HiggsAnalysis/CombinedLimit/interface/FitterAlgoBase.h"
 #include <RooRealVar.h>
+#include "TH2D.h"
 #include <vector>
 
 class MultiDimFit : public FitterAlgoBase {
@@ -61,6 +62,14 @@ protected:
   static float centeredRange_;
   static std::string setParametersForGrid_;
 
+  static bool importanceSampling_;
+  TH2D *importanceSamplingTH2D_;
+  static bool computeCovarianceMatrix_;
+
+  static bool doPointsDefined_;
+  static std::string doPoints_;
+  static std::vector<int> doPointsList_;
+
   static bool robustHesse_;
   static std::string robustHesseLoad_;
   static std::string robustHesseSave_;
@@ -100,6 +109,8 @@ protected:
   void saveResult(RooFitResult &res);
   /// split values passed to --gridPoints option, e.g. "10,20" -> unsigned int vector {10, 20}
   void splitGridPoints(const std::string& s, std::vector<unsigned int>& points) const;
+
+  void saveCovarianceMatrix(RooFitResult &res);
 };
 
 
