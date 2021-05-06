@@ -888,8 +888,8 @@ void MultiDimFit::doGrid(RooWorkspace *w, RooAbsReal &nll)
                                 }
                         }
                 else{
-                    double x =  pmin[0] + (i + spacingOffsetX) * deltaX;
-                    double y =  pmin[1] + (j + spacingOffsetY) * deltaY;
+                    x =  pmin[0] + (i + spacingOffsetX) * deltaX;
+                    y =  pmin[1] + (j + spacingOffsetY) * deltaY;
                 }
                 if (verbose && (ipoint % nprint == 0)) {
                          fprintf(sentry.trueStdOut(), "Point %d/%d, (i,j) = (%d,%d), %s = %f, %s = %f\n",
